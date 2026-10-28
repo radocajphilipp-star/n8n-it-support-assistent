@@ -1,0 +1,1491 @@
+{
+  "name": "Großprojekt IT Support",
+  "nodes": [
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "787f3713-1e40-43ff-835a-ff9df17db34e",
+              "name": "vorgang",
+              "value": "={{ 'VG-' + $now.format('yyyyMMdd-HHmmss') }}",
+              "type": "string"
+            },
+            {
+              "id": "f9ba17fd-053a-4257-bbf6-aa0521389de1",
+              "name": "quelle",
+              "value": "formular",
+              "type": "string"
+            },
+            {
+              "id": "96f02c7a-d03c-442a-9e4d-46185b4e17db",
+              "name": "kategorie",
+              "value": "={{ $json.Kategorie }}",
+              "type": "string"
+            },
+            {
+              "id": "fc806ae1-b3c7-4567-8937-4715b76edb84",
+              "name": "kurzbeschreibung",
+              "value": "={{ ($json.Kurzbeschreibung || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "99e267a5-47bd-47ee-a85f-dfb44d2e3fe8",
+              "name": "geraet",
+              "value": "={{ ($json.Geraetename || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "3dfabc3c-83f4-44c4-8cb0-3b400c4027db",
+              "name": "standort",
+              "value": "={{ ($json.Standort || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "9aa4fcaf-7fd8-46fd-9a03-b94a096b0e1e",
+              "name": "produktion",
+              "value": "={{ $json['Produktion betroffen'] === 'ja' }}",
+              "type": "boolean"
+            },
+            {
+              "id": "9211d074-9907-48d3-b0f8-8b757fb1b914",
+              "name": "text",
+              "value": "={{ ($json.Fehlerbeschreibung || '').trim() }}",
+              "type": "string"
+            },
+            {
+              "id": "6a54e599-e6c8-4f6e-bdcf-611ed775516f",
+              "name": "absender",
+              "value": "={{ $json.Rueckmeldeadresse }}",
+              "type": "string"
+            },
+            {
+              "id": "5b34593d-490e-4bd2-8d35-dd475e81e575",
+              "name": "eingang",
+              "value": "={{ $json.submittedAt }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ],
+      "id": "fa08cc58-e5ec-457f-b658-1e9b25871449",
+      "name": "Eingang vereinheitlichen"
+    },
+    {
+      "parameters": {
+        "formTitle": "Supportanfrage",
+        "formDescription": "Bitte beschreiben Sie Ihr Anliegen. Je vollständiger die Angaben, desto schneller können wir helfen.",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Kategorie",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Passwort-Selbsthilfe"
+                  },
+                  {
+                    "option": "Standardsoftware"
+                  },
+                  {
+                    "option": "Microsoft 365"
+                  },
+                  {
+                    "option": "Drucker und Scanner"
+                  },
+                  {
+                    "option": "How-to"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Kurzbeschreibung"
+            },
+            {
+              "fieldLabel": "Geraetename"
+            },
+            {
+              "fieldLabel": "Standort",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Werk Sued"
+                  },
+                  {
+                    "option": "Werk Nord"
+                  },
+                  {
+                    "option": "Vertriebsbuero"
+                  },
+                  {
+                    "option": "West"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Produktion betroffen",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "ja"
+                  },
+                  {
+                    "option": "nein"
+                  }
+                ]
+              }
+            },
+            {
+              "fieldLabel": "Fehlerbeschreibung",
+              "fieldType": "textarea",
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Rueckmeldeadresse",
+              "fieldType": "email",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.6,
+      "position": [
+        0,
+        0
+      ],
+      "id": "e3e387d4-1ab4-40b2-a186-cdc9b64c3fa9",
+      "name": "Pilot KI-Assistent IT-Support",
+      "webhookId": "5db42d9a-ab07-4da0-8cd9-3445a96ee5d1"
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  Eingangspruefung\n  ----------------\n  Prueft die Anfrage, bevor sie in den KI-Pfad geht, und setzt das Feld\n  pruefung auf einen von vier Werten: sensibel, produktionskritisch,\n  unvollstaendig oder ok.\n\n  Die Reihenfolge der Pruefungen ist Fachlogik und darf nicht vertauscht\n  werden. Vertraulichkeit geht vor Eilbeduerftigkeit, und ein Eilfall darf\n  nicht wegen einer fehlenden Angabe in der Nachforderungsschleife haengen.\n*/\n\n// Begriffe, die auf einen personalbezogenen oder vertraulichen Vorgang\n// hindeuten. Bewusst grosszuegig gewaehlt: ein Fehlalarm kostet nur eine\n// manuelle Sichtung, ein uebersehener Fall verletzt eine Vorgabe.\nconst SENSIBEL = [\n  'abmahnung', 'kuendigung', 'kündigung', 'personalakte', 'personalgespraech',\n  'personalgespräch', 'gehalt', 'lohnabrechnung', 'entgelt', 'abfindung',\n  'aufhebungsvertrag', 'krankmeldung', 'krankschreibung', 'arbeitsunfaehig',\n  'arbeitsunfähig', 'attest', 'diagnose', 'schwerbehinderung',\n  'wiedereingliederung', 'mutterschutz', 'elternzeit', 'betriebsrat',\n  'personalrat', 'mitbestimmung', 'hinweisgeber', 'whistleblow', 'meldestelle',\n  'bewerbung', 'bewerber', 'zeugnis', 'mobbing', 'belaestigung', 'belästigung'\n];\n\n// Beide Freitextfelder zusammen durchsuchen, alles kleingeschrieben,\n// damit die Schreibweise keine Rolle spielt.\nconst suchfeld = ($json.kurzbeschreibung + ' ' + $json.text).toLowerCase();\n\n// Alle Treffer sammeln, damit im Pruefgrund steht, welches Wort ausgeloest hat.\n// Das braucht die Person, die den Fall danach manuell sichtet.\nconst treffer = SENSIBEL.filter(wort => suchfeld.includes(wort));\n\nlet pruefung;\nlet pruefgrund;\n\nif (treffer.length > 0) {\n  // 1. Vertraulichkeit zuerst. Weder Notion noch das Sprachmodell sehen den Fall.\n  pruefung = 'sensibel';\n  pruefgrund = 'Begriff erkannt: ' + treffer.join(', ');\n\n} else if ($json.produktion === true) {\n  // 2. Eilfall. Umgeht den KI-Pfad, weil eine Fehleinstufung hier\n  //    den Produktionsstillstand verlaengert.\n  pruefung = 'produktionskritisch';\n  pruefgrund = 'Produktion betroffen';\n\n} else if (!$json.geraet || !$json.standort) {\n  // 3. Erst jetzt stoert eine Luecke. Der Pruefgrund nennt die fehlenden\n  //    Felder einzeln, damit die Nachforderung konkret werden kann.\n  const fehlt = [];\n  if (!$json.geraet)   fehlt.push('Geraetename');\n  if (!$json.standort) fehlt.push('Standort');\n  pruefung = 'unvollstaendig';\n  pruefgrund = 'Fehlende Angaben: ' + fehlt.join(', ');\n\n} else {\n  // 4. Alles in Ordnung, der Vorgang darf in die Wissenssuche.\n  pruefung = 'ok';\n  pruefgrund = '';\n}\n\n// Die urspruenglichen Felder bleiben erhalten, die zwei neuen kommen dazu.\nreturn { json: { ...$json, pruefung, pruefgrund } };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "a5980f31-eb42-4bda-82b3-42bf9d239c86",
+      "name": "Eingangsprüfung"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.pruefung }}",
+                    "rightValue": "sensibel",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "5ac25c7f-6db2-4614-b29c-9bba1efe7667"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "sensibel"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "f4af15c3-55c0-43c1-9e5e-b9faacc39915",
+                    "leftValue": "={{ $json.pruefung }}",
+                    "rightValue": "produktionskritisch",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "produktionskritisch"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "2ac9d217-a265-4e81-93e3-57c7ed54c779",
+                    "leftValue": "={{ $json.pruefung }}",
+                    "rightValue": "unvollstaendig",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "unvollstaendig"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "45abc1a1-d78c-4253-abf5-8e68972598c3",
+                    "leftValue": "={{ $json.pruefung }}",
+                    "rightValue": "ok",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "ok"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        672,
+        -48
+      ],
+      "id": "bcd80cfe-b8ce-4221-82af-81702a437584",
+      "name": "Ergebnis der Eingangsprüfung"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "operation": "getAll",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "3fd8d90e-b579-80de-833e-000b30633f7c",
+          "mode": "list",
+          "cachedResultName": "IT Support Wissensdatenbank (Pilot)",
+          "cachedResultUrl": "https://app.notion.com/p/3fd8d90eb579804c8e57d490bd11f738"
+        },
+        "returnAll": true,
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "key": "Status|select",
+              "condition": "equals",
+              "optionValue": "Freigegeben"
+            },
+            {
+              "key": "Kategorie|select",
+              "condition": "equals",
+              "optionValue": "={{ $json.kategorie }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        1216,
+        32
+      ],
+      "id": "2f8edd56-1e8a-4e73-a243-7d20a8696fd4",
+      "name": "Wissensdatenbank abfragen",
+      "alwaysOutputData": true,
+      "credentials": {
+        "notionApi": {
+          "id": "hxjJNLfksjpDZqYS",
+          "name": "Notion Wissensdatenbank"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  Treffer bewerten\n  ----------------\n  Vergleicht die Stichworte der gefundenen Artikel mit dem Suchtext der\n  Anfrage und waehlt den besten Treffer aus.\n\n  Ab hier fuehren wir Anfrage und Suchergebnis wieder zusammen. Die Anfrage\n  holen wir uns direkt vom Node \"Suchtext bilden\", weil der Notion-Node sie\n  aus dem Datenstrom verdraengt hat.\n*/\n\nconst anfrage = $('Suchtext bilden').first().json;\n\n// Dieselbe Normalisierung wie im Node davor. Beide Seiten muessen gleich\n// behandelt werden, sonst findet \"zuruecksetzen\" nie \"zurücksetzen\".\nfunction normalisieren(s) {\n  return (s || '')\n    .toLowerCase()\n    .replace(/ä/g, 'ae')\n    .replace(/ö/g, 'oe')\n    .replace(/ü/g, 'ue')\n    .replace(/ß/g, 'ss');\n}\n\n/*\n  Ab wie vielen Punkten gilt ein Artikel als geeigneter Treffer.\n  Das ist die zentrale Stellschraube des gesamten Workflows und zugleich\n  die Groesse, die ueber die Kennzahl Trefferquote entscheidet.\n  Zu niedrig bedeutet viele unpassende Vorschlaege, zu hoch bedeutet,\n  dass der Assistent fast nie etwas findet.\n*/\nconst SCHWELLWERT = 1;\n\n/*\n  Leere Items herausfiltern. Bei null Treffern liefert der Notion-Node wegen\n  \"Always Output Data\" ein leeres Item, das hier nicht mitgezaehlt werden darf.\n*/\nconst kandidaten = $input.all()\n  .map(item => item.json)\n  .filter(artikel => artikel && artikel.property_kennung);\n\nlet beste = null;\n\nfor (const artikel of kandidaten) {\n\n  // Ein Stichwort zaehlt, wenn es irgendwo im Suchtext vorkommt, auch als\n  // Teil eines laengeren Wortes. Dadurch findet \"drucker\" auch\n  // \"Etikettendrucker\".\n  const stichworte = (artikel.property_stichworte || []).map(normalisieren);\n  const getroffen = stichworte.filter(s => s && anfrage.suchtext.includes(s));\n\n  // Woerter aus dem Titel zaehlen zusaetzlich, aber nur halb. Sie sind ein\n  // schwaecheres Signal als ein bewusst vergebenes Stichwort.\n  const titelwoerter = normalisieren(artikel['property_titel'])\n    .split(/[^a-z0-9]+/)\n    .filter(wort => wort.length >= 5);\n  const titeltreffer = titelwoerter.filter(wort => anfrage.suchtext.includes(wort));\n\n  const score = getroffen.length + titeltreffer.length * 0.5;\n\n  if (!beste || score > beste.score) {\n    beste = {\n      score: score,\n      getroffen: getroffen,\n      kennung: artikel.property_kennung,\n      titel: artikel['property_titel'],\n      pruefdatum: artikel['property_prüfdatum'] ? artikel['property_prüfdatum'].start : '',\n      loesung: artikel['property_lösungstext'] || ''\n    };\n  }\n}\n\nconst treffer = beste !== null && beste.score >= SCHWELLWERT;\n\n// Genau ein Item zurueckgeben: die Anfrage, ergaenzt um das Suchergebnis.\nreturn [{\n  json: {\n    ...anfrage,\n    treffer: treffer,\n    score: beste ? beste.score : 0,\n    kandidaten: kandidaten.length,\n    getroffene_stichworte: beste ? beste.getroffen : [],\n    artikel_kennung:   treffer ? beste.kennung    : '',\n    artikel_titel:     treffer ? beste.titel      : '',\n    artikel_pruefdatum: treffer ? beste.pruefdatum : '',\n    artikel_loesung:   treffer ? beste.loesung    : ''\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        16
+      ],
+      "id": "67ab929e-caef-47bd-818c-cf980e3bd254",
+      "name": "Treffer bewerten"
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  Suchtext bilden\n  ---------------\n  Bereitet die Anfrage fuer den Abgleich mit den Notion-Stichworten vor.\n\n  Zwei Ergebnisse:\n  suchtext    - der gesamte Anfragetext, kleingeschrieben und ohne Umlaute\n  suchwoerter - die bedeutungstragenden Einzelwoerter daraus\n*/\n\n// Woerter, die in fast jeder Supportanfrage vorkommen und deshalb nichts\n// ueber das Thema aussagen. Ohne diese Liste wuerde jeder Artikel Punkte\n// sammeln und die Bewertung waere wertlos.\nconst STOPPWOERTER = [\n  'ich', 'und', 'oder', 'der', 'die', 'das', 'ein', 'eine', 'einen', 'einem',\n  'einer', 'den', 'dem', 'des', 'ist', 'sind', 'war', 'habe', 'hat', 'haben',\n  'kann', 'koennen', 'nicht', 'mehr', 'mein', 'meine', 'meinen', 'sich', 'bei',\n  'mit', 'von', 'vom', 'fuer', 'auf', 'aus', 'ueber', 'wie', 'was', 'wann',\n  'warum', 'man', 'wir', 'ihr', 'bin', 'wird', 'werden', 'noch', 'schon',\n  'immer', 'jetzt', 'bitte', 'danke', 'hallo', 'guten', 'morgen', 'abend',\n  'hilfe', 'problem', 'frage', 'anfrage', 'funktioniert', 'geht', 'dass',\n  'auch', 'nur', 'zum', 'zur', 'als', 'selbst', 'wieder', 'dreimal'\n];\n\n/*\n  Umlaute werden vereinheitlicht, weil Anfragende sie mal so und mal so\n  schreiben. Wichtig: derselbe Schritt wird im naechsten Node auch auf die\n  Notion-Stichworte angewendet. Nur wenn beide Seiten gleich behandelt\n  werden, findet \"zuruecksetzen\" auch \"zurücksetzen\".\n*/\nfunction normalisieren(s) {\n  return (s || '')\n    .toLowerCase()\n    .replace(/ä/g, 'ae')\n    .replace(/ö/g, 'oe')\n    .replace(/ü/g, 'ue')\n    .replace(/ß/g, 'ss');\n}\n\n// Alle Freitextfelder zusammenfassen. Der Geraetename ist bewusst dabei,\n// weil dort oft der Geraetetyp steckt, etwa \"Etikettendrucker\".\nconst suchtext = normalisieren(\n  $json.kurzbeschreibung + ' ' + $json.text + ' ' + $json.geraet\n);\n\n/*\n  Einzelwoerter herausloesen. Alles, was kein Buchstabe und keine Ziffer ist,\n  gilt als Trenner. Woerter unter vier Zeichen fliegen raus, weil sie zu\n  unspezifisch sind. Set entfernt Dubletten.\n*/\nconst suchwoerter = [...new Set(\n  suchtext\n    .split(/[^a-z0-9]+/)\n    .filter(wort => wort.length >= 4)\n    .filter(wort => !STOPPWOERTER.includes(wort))\n)];\n\nreturn {\n  json: {\n    ...$json,\n    suchtext: suchtext,\n    suchwoerter: suchwoerter\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        32
+      ],
+      "id": "1249c578-e622-496e-b637-024237f3e76c",
+      "name": "Suchtext bilden"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=Du bist Mitarbeiter im IT-Service-Desk der Bergmann Industriekomponenten GmbH\nund formulierst einen Antwortvorschlag an eine anfragende Person.\nRegeln:\n- Verwende keine Formatierungszeichen wie Sternchen, Rauten oder\n  Unterstriche. Nur Fliesstext und, wo noetig, nummerierte Schritte.\n- Verwende ausschliesslich Informationen aus dem Wissenseintrag.\n- Ergaenze nichts aus eigenem Wissen, auch keine zusaetzlichen Tipps.\n- Deckt der Wissenseintrag das geschilderte Problem nicht ab, antworte\n  ausschliesslich mit KEIN_ENTWURF und sonst gar nichts.\n- Schreibe sachlich und in der Sie-Form.\n- Keine Anrede und keine Grussformel, nur der Antworttext.\n- Hoechstens 150 Woerter.\nAnfrage:\n{{ $json.text }}\nGeraet: {{ $json.geraet }}\nStandort: {{ $json.standort }}\nWissenseintrag \"{{ $json.artikel_titel }}\":\n{{ $json.artikel_loesung }}",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        1936,
+        0
+      ],
+      "id": "7f7576f7-fc64-438b-81bb-4b57d41d9499",
+      "name": "Antwortvorschlag erzeugen"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-oss-120b",
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        2016,
+        144
+      ],
+      "id": "3d4519c5-6838-4e94-885f-a1f6d224f7a0",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "8g4UzcAkrmCowDWU",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "00ccea0e-fa12-4af9-8e65-643f472eb5db",
+              "leftValue": "={{ $json.treffer }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1680,
+        16
+      ],
+      "id": "660bda8a-baa0-46d6-a2ad-44396ecad548",
+      "name": "Passende Loesung gefunden?"
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  Entwurf pruefen\n  ---------------\n  Fuehrt Anfrage und Entwurf wieder zusammen und prueft, ob ueberhaupt ein\n  brauchbarer Entwurf entstanden ist.\n\n  Der Chain-Node gibt nur das Feld text zurueck und verdraengt damit alle\n  Angaben der Anfrage. Die holen wir uns vom Node \"Treffer bewerten\" zurueck.\n*/\n\nconst anfrage = $('Treffer bewerten').first().json;\n\nconst roh = ($json.text || '').trim();\n\n/*\n  Das Modell soll KEIN_ENTWURF sagen, wenn der Artikel das Problem nicht\n  abdeckt. Das ist der zweite Filter nach dem Punktwert: Der erste prueft,\n  ob ein Artikel inhaltlich nahe genug ist, der zweite, ob sich daraus\n  ueberhaupt eine Antwort formulieren laesst.\n*/\nconst brauchbar = roh.length > 0 && !roh.toUpperCase().includes('KEIN_ENTWURF');\n\nreturn [{\n  json: {\n    ...anfrage,\n    entwurf: brauchbar ? roh : '',\n    entwurf_ok: brauchbar,\n    entwurf_grund: brauchbar ? '' : 'Das Modell konnte aus dem Artikel keine Antwort ableiten'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        0
+      ],
+      "id": "3b317843-462e-4d9c-a094-abf31e29c357",
+      "name": "Entwurf pruefen"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "d63fb35a-8c54-49e6-b8b4-4b2265a6f612",
+              "leftValue": "={{ $json.entwurf_ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        2448,
+        0
+      ],
+      "id": "cc565128-309d-4f52-a68c-f65dfa3c9456",
+      "name": "Entwurf brauchbar?"
+    },
+    {
+      "parameters": {
+        "content": "## 1. Eingang und Prüfung\n",
+        "height": 368,
+        "width": 1056
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -112,
+        -96
+      ],
+      "typeVersion": 1,
+      "id": "d6f967ae-b503-498e-8b85-b8ddd7146ae9",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## 2. Wissenssuche\n\n",
+        "height": 368,
+        "width": 864,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        960,
+        -96
+      ],
+      "typeVersion": 1,
+      "id": "ac455b66-4193-492a-a062-d5a4c08802cc",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## 3. Antwortvorschlag\n\n\n",
+        "height": 368,
+        "width": 752,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1856,
+        -96
+      ],
+      "typeVersion": 1,
+      "id": "fb808784-431e-46d0-b6d5-b85cd03893af",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "radocajphilipp+freigabe@gmail.com",
+        "subject": "=Freigabe erforderlich: {{ $json.vorgang }} - {{ $json.kategorie }}",
+        "message": "=Vorgang: {{ $json.vorgang }}\nEingegangen: {{ $json.eingang }}\n\nANFRAGE\nKategorie: {{ $json.kategorie }}\nGeraet: {{ $json.geraet }}\nStandort: {{ $json.standort }}\nProduktion betroffen: {{ $json.produktion ? 'ja' : 'nein' }}\n\n{{ $json.text }}\n\nQUELLE DES VORSCHLAGS\nKennung: {{ $json.artikel_kennung }}\nTitel: {{ $json.artikel_titel }}\nLetzte Pruefung: {{ $json.artikel_pruefdatum }}\nUebereinstimmung: {{ $json.score }} Punkte ueber {{ $json.getroffene_stichworte.join(', ') }}\n\nANTWORTVORSCHLAG\n{{ $json.entwurf }}\n\nBitte pruefen Sie, ob der Vorschlag das geschilderte Problem loest und ob die\nQuelle aktuell ist. Ablehnen ist jederzeit moeglich und muss nicht begruendet\nwerden. Ohne Freigabe wird nichts versendet.",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Entscheidung",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "freigeben"
+                  },
+                  {
+                    "option": "geaendert freigeben"
+                  },
+                  {
+                    "option": "ablehnen"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Geaenderte Fassung",
+              "fieldType": "textarea"
+            },
+            {
+              "fieldLabel": "Grund"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2704,
+        -16
+      ],
+      "id": "b7dedd53-fb76-4ee6-8594-f07bf9cf9607",
+      "name": "Freigabe anfordern",
+      "webhookId": "a3d34482-4413-4803-97d0-bbf21eee6ad6",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2LqBrfRJkHubJUhF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  Freigabe auswerten\n  ------------------\n  Fuehrt Anfrage und Freigabeentscheidung zusammen und bestimmt, welcher\n  Text tatsaechlich versendet wird.\n*/\n\nconst anfrage = $('Entwurf pruefen').first().json;\nconst antwort = $json.data || {};\n\n// Faellt die Antwort aus, etwa bei Zeitablauf, gilt das als Ablehnung.\n// Stillschweigende Freigabe darf es nicht geben.\nconst entscheidung = (antwort.Entscheidung || 'ablehnen').trim();\n\n// Feldname mit Leerzeichen, deshalb eckige Klammern.\nconst geaendert = (antwort['Geaenderte Fassung'] || '').trim();\nconst grund     = (antwort.Grund || '').trim();\n\nconst freigegeben = entscheidung === 'freigeben'\n                 || entscheidung === 'geaendert freigeben';\n\n/*\n  Bei einer geaenderten Fassung gilt der Text der pruefenden Person.\n  Bleibt das Feld leer, obwohl \"geaendert freigeben\" gewaehlt wurde, faellt\n  der Workflow auf den urspruenglichen Entwurf zurueck, statt eine leere\n  Mail zu verschicken.\n*/\nconst versandtext = (entscheidung === 'geaendert freigeben' && geaendert.length > 0)\n  ? geaendert\n  : anfrage.entwurf;\n\nreturn [{\n  json: {\n    ...anfrage,\n    freigabe: entscheidung,\n    freigabe_grund: grund,\n    freigabe_zeit: antwort.respondedAt || '',\n    freigegeben: freigegeben,\n    versandtext: freigegeben ? versandtext : ''\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2928,
+        -16
+      ],
+      "id": "f847f244-b83d-4ad2-bcd2-c6d926dfc0e5",
+      "name": "Freigabe auswerten"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "42c04eee-c34b-4068-9b69-e95574373d86",
+              "leftValue": "={{ $json.freigegeben }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3152,
+        -16
+      ],
+      "id": "d06fb42b-37cc-4831-978d-7863499706c3",
+      "name": "Freigegeben?"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.absender }}",
+        "subject": "=Ihre Supportanfrage {{ $json.vorgang }}",
+        "emailType": "text",
+        "message": "=Guten Tag,  vielen Dank fuer Ihre Anfrage.  {{ $json.versandtext }}  Falls das Problem damit nicht geloest ist, antworten Sie bitte auf diese E-Mail. Wir melden uns dann erneut.  Mit freundlichen Gruessen IT-Service-Desk Bergmann Industriekomponenten GmbH  -- Vorgang: {{ $json.vorgang }} Diese Antwort wurde mit Unterstuetzung eines KI-Assistenten aus dem freigegebenen Wissenseintrag {{ $json.artikel_kennung }} erstellt und vor dem Versand von einem Menschen geprueft.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3392,
+        -32
+      ],
+      "id": "27a3826e-7415-4de4-93d7-65fde089c184",
+      "name": "Antwort versenden",
+      "webhookId": "c384a584-d051-4f59-9f74-3b1aa9ce884d",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2LqBrfRJkHubJUhF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  Protokolleintrag erzeugen\n  -------------------------\n  Erzeugt den Datensatz, der den Vorgang nachvollziehbar macht, ohne eine\n  Leistungsauswertung zu ermoeglichen.\n\n  Bewusst nicht enthalten: der Inhalt der Anfrage, der Antworttext und der\n  Klarname der freigebenden Person.\n*/\n\nconst d = $('Freigabe auswerten').first().json;\n\n/*\n  Einfache Einwegfunktion fuer die pseudonyme Freigabekennung.\n  Fuer den Prototyp ausreichend, um das Prinzip zu zeigen. Im Betrieb waere\n  hier ein HMAC mit einem Projektschluessel zu verwenden, der getrennt\n  verwahrt wird.\n*/\nfunction kennung(text) {\n  let h = 0;\n  const roh = 'pilot-2026-' + (text || '');\n  for (let i = 0; i < roh.length; i++) {\n    h = (h * 31 + roh.charCodeAt(i)) >>> 0;\n  }\n  return 'FR-' + h.toString(16).toUpperCase().padStart(8, '0');\n}\n\n// Dauer von der Anfrage bis zur Freigabe, in Minuten.\nlet dauer = null;\nif (d.eingang && d.freigabe_zeit) {\n  dauer = Math.round(\n    (new Date(d.freigabe_zeit) - new Date(d.eingang)) / 60000\n  );\n}\n\nreturn [{\n  json: {\n    vorgang: d.vorgang,\n    zeitpunkt: d.freigabe_zeit,\n    quelle: d.quelle,\n    kategorie: d.kategorie,\n    standort: d.standort,\n    pfad: 'Antwort versendet',\n    artikel_kennung: d.artikel_kennung,\n    artikel_pruefdatum: d.artikel_pruefdatum,\n    score: d.score,\n    kandidaten: d.kandidaten,\n    entscheidung: d.freigabe,\n    dauer_minuten: dauer,\n    freigabe_kennung: kennung('freigabe-postfach'),\n    ungeprueft_versendet: false\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3616,
+        -32
+      ],
+      "id": "b87b2cfc-13e3-4137-8c9d-ef259b7791e9",
+      "name": "Protokolleintrag erzeugen"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "dataSourceId": {
+          "__rl": true,
+          "value": "3fe8d90e-b579-808b-bae4-000bc749fb8f",
+          "mode": "list",
+          "cachedResultName": "IT Support Protokoll (Pilot)",
+          "cachedResultUrl": "https://app.notion.com/p/3fe8d90eb579805b920cc09cfc6a7da2"
+        },
+        "title": "={{ $json.vorgang }}",
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Zeitpunkt|date",
+              "date": "={{ $json.zeitpunkt }}"
+            },
+            {
+              "key": "Kategorie|rich_text",
+              "textContent": "={{ $json.kategorie }}"
+            },
+            {
+              "key": "Standort|rich_text",
+              "textContent": "={{ $json.standort }}"
+            },
+            {
+              "key": "=Pfad|rich_text",
+              "textContent": "={{ $json.pfad }}"
+            },
+            {
+              "key": "Artikelkennung|rich_text",
+              "textContent": "={{ $json.artikel_kennung }}"
+            },
+            {
+              "key": "Artikel Pruefdatum|rich_text",
+              "textContent": "={{ $json.artikel_pruefdatum }}"
+            },
+            {
+              "key": "Score|number",
+              "numberValue": "={{ $json.score }}"
+            },
+            {
+              "key": "Kandidaten|number",
+              "numberValue": "={{ $json.kandidaten }}"
+            },
+            {
+              "key": "Entscheidung|rich_text",
+              "textContent": "={{ $json.entscheidung }}"
+            },
+            {
+              "key": "Dauer Minuten|number",
+              "numberValue": "={{ $json.dauer_minuten }}"
+            },
+            {
+              "key": "Freigabekennung|rich_text",
+              "textContent": "={{ $json.freigabe_kennung }}"
+            },
+            {
+              "key": "Ungeprueft versendet|checkbox"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 3,
+      "position": [
+        3840,
+        -32
+      ],
+      "id": "48469fc4-5f8a-403d-beaa-5b37609809ed",
+      "name": "Protokoll schreiben",
+      "credentials": {
+        "notionApi": {
+          "id": "hxjJNLfksjpDZqYS",
+          "name": "Notion Wissensdatenbank"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 4. Freigabe und Versand\n\n",
+        "height": 368,
+        "width": 1424,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2640,
+        -96
+      ],
+      "typeVersion": 1,
+      "id": "42fd139e-cea8-4d73-a130-05c5c5842375",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  Weiterleitung aufbereiten\n  -------------------------\n  Sammelpunkt fuer alle Wege, die ohne versendbare Antwort enden.\n  Vier Zulaeufe: kein Treffer, kein Entwurf, Vorschlag abgelehnt und\n  Wissensdatenbank nicht erreichbar.\n\n  Der Grund wird aus dem jeweils eintreffenden Item abgeleitet, damit der\n  First Level sieht, warum der Assistent nicht helfen konnte.\n*/\n\n// Die Anfrage selbst liegt in jedem der vier Faelle hier vor.\nconst a = $('Suchtext bilden').first().json;\nconst e = $json || {};\n\nlet grund;\nif (e.freigegeben === false) {\n  grund = 'Der Antwortvorschlag wurde bei der Freigabe abgelehnt';\n} else if (e.entwurf_ok === false) {\n  grund = 'Aus dem gefundenen Wissenseintrag liess sich keine Antwort ableiten';\n} else if (e.treffer === false) {\n  grund = (e.kandidaten === 0)\n    ? 'In dieser Kategorie gibt es keinen freigegebenen Wissenseintrag'\n    : 'Es wurde kein ausreichend passender Wissenseintrag gefunden';\n} else {\n  // Uebrig bleibt der Fehlerzweig des Notion-Nodes.\n  grund = 'Die Wissensdatenbank war nicht erreichbar';\n}\n\n// Zusatzangaben, soweit sie im jeweiligen Fall ueberhaupt existieren.\nconst details = [];\nif (e.kandidaten !== undefined) {\n  details.push('Geprueft: ' + e.kandidaten + ' freigegebene Artikel dieser Kategorie');\n}\nif (e.artikel_kennung) {\n  details.push('Bester Treffer: ' + e.artikel_kennung + ' mit ' + e.score + ' Punkten');\n}\nif (e.freigabe_grund) {\n  details.push('Hinweis der pruefenden Person: ' + e.freigabe_grund);\n}\n\nreturn [{\n  json: {\n    ...a,\n    weiterleitung_grund: grund,\n    weiterleitung_details: details.join('\\n'),\n    pfad: 'Weiterleitung First Level'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2672,
+        -352
+      ],
+      "id": "75a6ae5b-fb64-4b65-96a9-4e9bb2a87925",
+      "name": "Weiterleitung aufbereiten"
+    },
+    {
+      "parameters": {
+        "sendTo": "radocajphilipp+firstlevel@gmail.com",
+        "subject": "=Bitte uebernehmen: {{ $json.vorgang }} - {{ $json.kategorie }}",
+        "emailType": "text",
+        "message": "=Diese Supportanfrage konnte nicht automatisch beantwortet werden und wird zur Bearbeitung uebergeben.  GRUND {{ $json.weiterleitung_grund }} {{ $json.weiterleitung_details }}  ANFRAGE Vorgang: {{ $json.vorgang }} Eingegangen: {{ $json.eingang }} Kategorie: {{ $json.kategorie }} Geraet: {{ $json.geraet }} Standort: {{ $json.standort }} Produktion betroffen: {{ $json.produktion ? 'ja' : 'nein' }} Rueckmeldeadresse: {{ $json.absender }}  Kurzbeschreibung: {{ $json.kurzbeschreibung }}  {{ $json.text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        2912,
+        -352
+      ],
+      "id": "d4e4b12b-85c5-42ec-becc-5eda100a551a",
+      "name": "Mail an den First Level",
+      "webhookId": "b6bd61e3-ffcb-46a5-84cd-7af31f086275",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2LqBrfRJkHubJUhF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 5. Weiterleitung an First Level\n\n\n\n",
+        "height": 368,
+        "width": 480,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        2640,
+        -480
+      ],
+      "typeVersion": 1,
+      "id": "353f6710-3d75-4b7a-9e39-ef296403d299",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "=radocajphilipp+firstlevel@gmail.com",
+        "subject": "=Rueckmeldung erbeten: {{ $('Weiterleitung aufbereiten').first().json.vorgang }}",
+        "message": "=Konnte die Anfrage mit Standardverfahren geloest werden?\n\nVorgang: {{ $('Weiterleitung aufbereiten').first().json.vorgang }}\nKategorie: {{ $('Weiterleitung aufbereiten').first().json.kategorie }}\nStandort: {{ $('Weiterleitung aufbereiten').first().json.standort }}\nGeraet: {{ $('Weiterleitung aufbereiten').first().json.geraet }}\n\n{{ $('Weiterleitung aufbereiten').first().json.text }}\n\nBei \"nicht geloest\" wird die Anfrage mit allen bisherigen\nBearbeitungsschritten an den Second Level uebergeben.",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Ergebnis",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "geloest"
+                  },
+                  {
+                    "option": "nicht geloest"
+                  }
+                ]
+              },
+              "requiredField": true
+            },
+            {
+              "fieldLabel": "Was wurde versucht",
+              "fieldType": "textarea"
+            }
+          ]
+        },
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3200,
+        -352
+      ],
+      "id": "b1ced629-d6db-4eac-96a8-adbeb2e2fc00",
+      "name": "Rueckmeldung First Level",
+      "webhookId": "1d11c6ab-510a-4342-b222-3ef394d36fc4",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2LqBrfRJkHubJUhF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cc66c7cb-d369-4f30-a26d-7989317329b6",
+              "leftValue": "={{ $json.data.Ergebnis }}",
+              "rightValue": "geloest",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3424,
+        -352
+      ],
+      "id": "2bbeff4f-2279-4035-9c61-e78ab3fa5d68",
+      "name": "Durch First Level geloest?"
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  Bearbeitungsschritte zusammenstellen\n  ------------------------------------\n  Baut die Historie des Vorgangs, damit der Second Level nicht bei null\n  anfaengt. Genau das verlangt die Fallakte bei der Eskalation.\n*/\n\nconst a = $('Weiterleitung aufbereiten').first().json;\nconst r = $json.data || {};\n\nconst schritte = [];\nschritte.push('1. Eingang ueber ' + a.quelle + ', eingegangen ' + a.eingang);\nschritte.push('2. Eingangspruefung: ' + a.pruefung);\nschritte.push('3. Wissenssuche in der Kategorie ' + a.kategorie);\nschritte.push('4. Ergebnis: ' + a.weiterleitung_grund);\nif (a.weiterleitung_details) {\n  schritte.push('   ' + a.weiterleitung_details.replace(/\\n/g, '\\n   '));\n}\nschritte.push('5. Weiterleitung an den First Level');\nschritte.push('6. First Level: nicht geloest');\nif (r['Was wurde versucht']) {\n  schritte.push('   Versucht: ' + r['Was wurde versucht']);\n}\n\nreturn [{\n  json: {\n    ...a,\n    bearbeitungsschritte: schritte.join('\\n'),\n    first_level_versucht: r['Was wurde versucht'] || '',\n    eskalation_zeit: r.respondedAt || '',\n    pfad: 'Eskalation Second Level'\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3664,
+        -288
+      ],
+      "id": "f4974d02-1e0d-4fb0-928e-fb14e026da83",
+      "name": "Bearbeitungsschritte"
+    },
+    {
+      "parameters": {
+        "sendTo": "radocajphilipp+secondlevel@gmail.com",
+        "subject": "=Eskalation: {{ $json.vorgang }} - {{ $json.kategorie }}",
+        "emailType": "text",
+        "message": "=Der First Level konnte diese Anfrage nicht mit Standardverfahren loesen. Sie wird mit allen bisherigen Bearbeitungsschritten uebergeben.  BISHERIGER VERLAUF {{ $json.bearbeitungsschritte }}  URSPRUENGLICHE ANFRAGE Vorgang: {{ $json.vorgang }} Kategorie: {{ $json.kategorie }} Geraet: {{ $json.geraet }} Standort: {{ $json.standort }} Produktion betroffen: {{ $json.produktion ? 'ja' : 'nein' }} Rueckmeldeadresse: {{ $json.absender }}  Kurzbeschreibung: {{ $json.kurzbeschreibung }}  {{ $json.text }}",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3856,
+        -288
+      ],
+      "id": "075d835c-546e-4709-88ee-5a82119fcf7e",
+      "name": "Mail an den Second Level",
+      "webhookId": "8c873c40-e007-4f50-9842-894ab9cb995a",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2LqBrfRJkHubJUhF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Weiterleitung aufbereiten').first().json.absender }}",
+        "subject": "=Ihre Supportanfrage {{ $('Weiterleitung aufbereiten').first().json.vorgang }}",
+        "emailType": "text",
+        "message": "=Guten Tag,  Ihre Anfrage wurde bearbeitet.  {{ $json.data['Was wurde versucht'] }}  Falls das Problem damit nicht geloest ist, antworten Sie bitte auf diese E-Mail.  Mit freundlichen Gruessen IT-Service-Desk Bergmann Industriekomponenten GmbH  -- Vorgang: {{ $('Weiterleitung aufbereiten').first().json.vorgang }} Diese Antwort wurde ohne Unterstuetzung des KI-Assistenten erstellt.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        3664,
+        -464
+      ],
+      "id": "b68dbe0b-116f-4089-9d2e-8dd004b131d5",
+      "name": "Loesung an anfragende Person",
+      "webhookId": "3593a585-1862-44ba-a970-2a8a1acab4d4",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2LqBrfRJkHubJUhF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 6. Eskalation Second Level\n\n\n\n",
+        "height": 368,
+        "width": 928,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3136,
+        -480
+      ],
+      "typeVersion": 1,
+      "id": "4b134958-5a5a-4400-bf90-07407c77c542",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "content": "## 7. Nebenpfade der Eingangspruefung\n\n\n",
+        "height": 688,
+        "width": 864,
+        "color": "#FCABD6"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        960,
+        304
+      ],
+      "typeVersion": 1,
+      "id": "4fa72f8c-9d2e-427a-9376-3e41fddaa51f",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "operation": "sendAndWait",
+        "sendTo": "={{ $json.absender }}",
+        "subject": "=Rueckfrage zu Ihrer Supportanfrage {{ $json.vorgang }}",
+        "message": "=Guten Tag,\n\nvielen Dank fuer Ihre Anfrage. Um sie bearbeiten zu koennen, fehlen uns noch\nAngaben.\n\nFehlend: {{ $json.pruefgrund }}\n\nBitte ergaenzen Sie die fehlenden Angaben ueber den Link unten. Danach wird\nIhre Anfrage automatisch weiterbearbeitet.\n\nIhre bisherige Beschreibung:\n{{ $json.text }}\n\nVorgang: {{ $json.vorgang }}",
+        "responseType": "customForm",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Geraetename"
+            },
+            {
+              "fieldLabel": "Standort",
+              "fieldType": "dropdown",
+              "fieldOptions": {
+                "values": [
+                  {
+                    "option": "Werk Sued"
+                  },
+                  {
+                    "option": "Werk Nord"
+                  },
+                  {
+                    "option": "Vertriebsbuero West"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1024,
+        752
+      ],
+      "id": "8d1a6ab9-bee7-41ca-b416-60bc94470571",
+      "name": "Nachforderung",
+      "webhookId": "8ba094ee-1f3b-4e1f-8e9f-4cb63114f509",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2LqBrfRJkHubJUhF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/*\n  Angaben ergaenzen\n  -----------------\n  Fuehrt die urspruengliche Anfrage mit den nachgereichten Angaben zusammen\n  und schickt sie zurueck in den normalen Ablauf.\n\n  Bereits vorhandene Werte bleiben erhalten, es wird nur gefuellt, was leer war.\n*/\n\nconst a = $('Eingangsprüfung').first().json;\nconst r = $json.data || {};\n\nconst geraet   = (r.Geraetename || '').trim() || a.geraet;\nconst standort = (r.Standort   || '').trim() || a.standort;\n\nreturn [{\n  json: {\n    ...a,\n    geraet: geraet,\n    standort: standort,\n    pruefung: 'ok',\n    pruefgrund: 'Angaben nachgefordert und ergaenzt',\n    nachgefordert: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1216,
+        752
+      ],
+      "id": "a4017b27-c54c-4d94-8c1e-e8df91c2c43d",
+      "name": "Angaben ergaenzen"
+    },
+    {
+      "parameters": {
+        "sendTo": "=radocajphilipp+sensibel@gmail.com",
+        "subject": "=Vertraulicher Vorgang ausgesteuert: {{ $json.vorgang }}",
+        "emailType": "text",
+        "message": "=Dieser Vorgang wurde vor der Wissenssuche ausgesteuert und nicht an den KI-Assistenten uebergeben.  Grund der Aussteuerung: {{ $json.pruefgrund }}  Vorgang: {{ $json.vorgang }} Eingegangen: {{ $json.eingang }} Kategorie: {{ $json.kategorie }} Standort: {{ $json.standort }} Rueckmeldeadresse: {{ $json.absender }}  Die Anfrage liegt unveraendert im Eingang und ist dort einzusehen. Sie wird in dieser Nachricht bewusst nicht wiedergegeben.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1024,
+        400
+      ],
+      "id": "1612e6d1-db3a-464c-88a3-f3592e92d58f",
+      "name": "Aussteuerung sensibel",
+      "webhookId": "4efe7d3d-35a9-40e5-936c-0ad889f3b5c9",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2LqBrfRJkHubJUhF",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "=radocajphilipp+firstlevel@gmail.com",
+        "subject": "=EILT - Produktion betroffen: {{ $json.standort }} - {{ $json.vorgang }}",
+        "emailType": "text",
+        "message": "=Diese Anfrage betrifft die Produktion und wurde deshalb nicht an den KI-Assistenten uebergeben, sondern sofort zur Bearbeitung weitergeleitet.  Vorgang: {{ $json.vorgang }} Eingegangen: {{ $json.eingang }} Standort: {{ $json.standort }} Geraet: {{ $json.geraet }} Kategorie: {{ $json.kategorie }} Rueckmeldeadresse: {{ $json.absender }}  Kurzbeschreibung: {{ $json.kurzbeschreibung }}  {{ $json.text }}  Hinweis: Weder die Wissensdatenbank noch das Sprachmodell wurden aufgerufen.",
+        "options": {
+          "appendAttribution": false
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1024,
+        576
+      ],
+      "id": "3b537a47-c8ff-41cf-b841-405c41313b47",
+      "name": "Eilweiterleitung",
+      "webhookId": "fe70abdc-8693-4a65-9d4e-cc3108110fd4",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2LqBrfRJkHubJUhF",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {
+    "Pilot KI-Assistent IT-Support": [
+      {
+        "json": {
+          "Kategorie": "Passwort-Selbsthilfe",
+          "Kurzbeschreibung": "Konto gesperrt",
+          "Geraetename": "NB-4711",
+          "Standort": "Werk Sued",
+          "Produktion betroffen": "nein",
+          "Fehlerbeschreibung": "Ich habe mein Windows-Kennwort dreimal falsch eingegeben und bin jetzt gesperrt. Wie setze ich es selbst zurueck?",
+          "Rueckmeldeadresse": "radocajphilipp+anfrager@gmail.com",
+          "submittedAt": "2026-10-20T08:15:00.000+02:00",
+          "formMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Pilot KI-Assistent IT-Support": {
+      "main": [
+        [
+          {
+            "node": "Eingang vereinheitlichen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eingang vereinheitlichen": {
+      "main": [
+        [
+          {
+            "node": "Eingangsprüfung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Eingangsprüfung": {
+      "main": [
+        [
+          {
+            "node": "Ergebnis der Eingangsprüfung",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ergebnis der Eingangsprüfung": {
+      "main": [
+        [
+          {
+            "node": "Aussteuerung sensibel",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Eilweiterleitung",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Nachforderung",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Suchtext bilden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Weiterleitung aufbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wissensdatenbank abfragen": {
+      "main": [
+        [
+          {
+            "node": "Treffer bewerten",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Weiterleitung aufbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suchtext bilden": {
+      "main": [
+        [
+          {
+            "node": "Wissensdatenbank abfragen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Treffer bewerten": {
+      "main": [
+        [
+          {
+            "node": "Passende Loesung gefunden?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Antwortvorschlag erzeugen",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Passende Loesung gefunden?": {
+      "main": [
+        [
+          {
+            "node": "Antwortvorschlag erzeugen",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Weiterleitung aufbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Antwortvorschlag erzeugen": {
+      "main": [
+        [
+          {
+            "node": "Entwurf pruefen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entwurf pruefen": {
+      "main": [
+        [
+          {
+            "node": "Entwurf brauchbar?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entwurf brauchbar?": {
+      "main": [
+        [
+          {
+            "node": "Freigabe anfordern",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Weiterleitung aufbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freigabe anfordern": {
+      "main": [
+        [
+          {
+            "node": "Freigabe auswerten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freigabe auswerten": {
+      "main": [
+        [
+          {
+            "node": "Freigegeben?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Freigegeben?": {
+      "main": [
+        [
+          {
+            "node": "Antwort versenden",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Weiterleitung aufbereiten",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Antwort versenden": {
+      "main": [
+        [
+          {
+            "node": "Protokolleintrag erzeugen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Protokolleintrag erzeugen": {
+      "main": [
+        [
+          {
+            "node": "Protokoll schreiben",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Weiterleitung aufbereiten": {
+      "main": [
+        [
+          {
+            "node": "Mail an den First Level",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mail an den First Level": {
+      "main": [
+        [
+          {
+            "node": "Rueckmeldung First Level",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rueckmeldung First Level": {
+      "main": [
+        [
+          {
+            "node": "Durch First Level geloest?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Durch First Level geloest?": {
+      "main": [
+        [
+          {
+            "node": "Loesung an anfragende Person",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Bearbeitungsschritte",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bearbeitungsschritte": {
+      "main": [
+        [
+          {
+            "node": "Mail an den Second Level",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Nachforderung": {
+      "main": [
+        [
+          {
+            "node": "Angaben ergaenzen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Angaben ergaenzen": {
+      "main": [
+        [
+          {
+            "node": "Suchtext bilden",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "errorWorkflow": "hAn46sYmc5GRNw05",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "6c6a105b-9e99-4b00-b890-9b87769ad084",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "ae3e81b08a7819b1f30df6df9b86acb1a941bd5931d8d435be0406478fc0f9a8"
+  },
+  "nodeGroups": [],
+  "id": "1LVgiX3ljg7vzsY8",
+  "tags": []
+}
